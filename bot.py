@@ -48,7 +48,7 @@ async def main():
         await bot.delete_webhook(drop_pending_updates=True)
         
         # Запуск polling
-        await dp.start_polling(bot, skip_updates=False)
+    await dp.start_polling()
     
     finally:
         # Остановка автоочистки
