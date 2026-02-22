@@ -1,5 +1,6 @@
 import logging
 import sys
+import asyncio
 from aiogram import Bot, Dispatcher, executor
 from config import BOT_TOKEN
 from handlers import start, media, audio, recognition
@@ -29,7 +30,7 @@ cleaner = TempFileCleaner(max_age_minutes=30)
 
 async def on_startup(dp):
     logger.info("🚀 Бот запущен!")
-    dp.loop.create_task(cleaner.start_auto_cleanup())
+    asyncio.create_task(cleaner.start_auto_cleanup())
 
 
 async def on_shutdown(dp):
