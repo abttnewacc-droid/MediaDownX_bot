@@ -6,55 +6,59 @@ from config import TEMP_DIR
 
 class TempFileCleaner:
     """Сервис автоматической очистки временных файлов"""
-    
+
     def __init__(self, max_age_minutes: int = 30):
-        self.temp_dir = TEMP_DIR
+        self.temp_dir: Path = TEMP_DIR
         self.max_age_seconds = max_age_minutes * 60
-        self.is_running = False
-    
+        self._task: asyncio.Task | None = None
+        self._stop_event = asyncio.Event()
+
     async def start_auto_cleanup(self):
-        """Запуск автоматической очистки"""
-        self.is_running = True
-        
-        while self.is_running:
+        """Запуск фоновой задачи очистки"""
+        if self._task and not self._task.done():
+            return
+
+        self._stop_event.clear()
+        self._task = asyncio.create_task(self._run())
+
+    async def _run(self):
+        while not self._stop_event.is_set():
             await self.cleanup_old_files()
-            await asyncio.sleep(300)  # Проверка каждые 5 минут
-    
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=300)
+            except asyncio.TimeoutError:
+                pass
+
     async def cleanup_old_files(self):
         """Очистка старых файлов"""
         try:
             current_time = time.time()
-            deleted_count = 0
-            
+
             for file_path in self.temp_dir.iterdir():
-                if file_path.is_file():
-                    file_age = current_time - file_path.stat().st_mtime
-                    
-                    if file_age > self.max_age_seconds:
-                        try:
-                            file_path.unlink()
-                            deleted_count += 1
-                        except Exception as e:
-                            print(f"Failed to delete {file_path}: {e}")
-            
-            if deleted_count > 0:
-                print(f"Cleaned up {deleted_count} old files")
-        
-        except Exception as e:
-            print(f"Cleanup error: {e}")
-    
+                if not file_path.is_file():
+                    continue
+
+                try:
+                    age = current_time - file_path.stat().st_mtime
+                    if age > self.max_age_seconds:
+                        file_path.unlink(missing_ok=True)
+                except Exception:
+                    continue
+
+        except Exception:
+            pass
+
     async def delete_file(self, filepath: Path, delay: int = 0):
         """Удаление конкретного файла с задержкой"""
         try:
             if delay > 0:
                 await asyncio.sleep(delay)
-            
-            if filepath.exists():
-                filepath.unlink()
-        
-        except Exception as e:
-            print(f"Delete error for {filepath}: {e}")
-    
+            filepath.unlink(missing_ok=True)
+        except Exception:
+            pass
+
     def stop(self):
-        """Остановка автоочистки"""
-        self.is_running = False
+        """Корректная остановка фоновой задачи"""
+        self._stop_event.set()
+        if self._task:
+            self._task.cancel()
