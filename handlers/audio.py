@@ -1,10 +1,10 @@
 from aiogram import types
 from aiogram.dispatcher import Dispatcher
+from aiogram.types.input_file import InputFile
 from services import MusicRecognizer, MediaDownloader, AudioProcessor
 from keyboards.inline import InlineKeyboards
 from utils.helpers import safe_delete_file
 import asyncio
-from aiogram.types import FSInputFile
 
 recognizer = MusicRecognizer()
 downloader = MediaDownloader()
@@ -130,8 +130,8 @@ async def callback_download_track(callback: types.CallbackQuery):
 async def callback_download_recognized(callback: types.CallbackQuery):
     """Callback скачивания распознанного трека"""
     try:
-        # Извлечение названия трека
-        track_title = callback.data.split(":", 1)[1]
+        # Извлечение названия трека (может содержать :)
+        track_title = callback.data[len("download_recognized:"):]
         
         await callback.message.edit_text(f"⏳ Скачиваю: <b>{track_title}</b>")
         
@@ -149,7 +149,7 @@ async def callback_download_recognized(callback: types.CallbackQuery):
             
             # Отправка
             await callback.message.answer_audio(
-                FSInputFile(audio_file),
+                InputFile(audio_file),
                 caption=f"🎵 {track_title}"
             )
             
