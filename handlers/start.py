@@ -1,13 +1,9 @@
-from aiogram import Router, F
-from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery
+from aiogram import types
+from aiogram.dispatcher import Dispatcher
 from keyboards.inline import InlineKeyboards
 
-router = Router()
 
-
-@router.message(CommandStart())
-async def cmd_start(message: Message):
+async def cmd_start(message: types.Message):
     """Обработчик команды /start"""
     welcome_text = """
 🎬 <b>Добро пожаловать в MediaDownX!</b>
@@ -39,15 +35,14 @@ async def cmd_start(message: Message):
 
 Или напиши название песни для поиска 🎶
 """
-    
+
     await message.answer(
         welcome_text,
         reply_markup=InlineKeyboards.main_menu()
     )
 
 
-@router.message(Command("help"))
-async def cmd_help(message: Message):
+async def cmd_help(message: types.Message):
     """Обработчик команды /help"""
     help_text = """
 📖 <b>Подробная инструкция:</b>
@@ -82,20 +77,18 @@ async def cmd_help(message: Message):
 • Быстрая обработка
 • Автоматические метаданные
 """
-    
+
     await message.answer(help_text)
 
 
-@router.callback_query(F.data == "help")
-async def callback_help(callback: CallbackQuery):
+async def callback_help(callback: types.CallbackQuery):
     """Callback кнопки помощи"""
     await callback.message.delete()
     await cmd_help(callback.message)
     await callback.answer()
 
 
-@router.callback_query(F.data == "about")
-async def callback_about(callback: CallbackQuery):
+async def callback_about(callback: types.CallbackQuery):
     """Информация о боте"""
     about_text = """
 🤖 <b>MediaDownX Bot</b>
@@ -118,9 +111,16 @@ async def callback_about(callback: CallbackQuery):
 
 💡 <b>Бот полностью бесплатный!</b>
 """
-    
+
     await callback.message.edit_text(
         about_text,
         reply_markup=InlineKeyboards.main_menu()
     )
     await callback.answer()
+
+
+def register(dp: Dispatcher):
+    dp.register_message_handler(cmd_start, commands=["start"])
+    dp.register_message_handler(cmd_help, commands=["help"])
+    dp.register_callback_query_handler(callback_help, lambda c: c.data == "help")
+    dp.register_callback_query_handler(callback_about, lambda c: c.data == "about")
