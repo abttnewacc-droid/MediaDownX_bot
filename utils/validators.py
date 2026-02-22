@@ -1,72 +1,81 @@
+# utils/validators.py
 import re
 from typing import Optional
 
+
 class URLValidator:
     """Валидатор URL для поддерживаемых платформ"""
-    
+
+    # максимально либеральные паттерны, чтобы yt-dlp сам решал
     PATTERNS = {
         'youtube': [
-            r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})',
+            r'youtu\.be\/',
+            r'youtube\.com\/',
         ],
         'instagram': [
-            r'instagram\.com\/(p|reel|stories|tv)\/([a-zA-Z0-9_-]+)',
+            r'instagram\.com\/',
         ],
         'tiktok': [
-            r'tiktok\.com\/.*\/video\/(\d+)',
-            r'vm\.tiktok\.com\/([a-zA-Z0-9]+)',
+            r'tiktok\.com\/',
         ],
         'twitter': [
-            r'(?:twitter|x)\.com\/\w+\/status\/(\d+)',
+            r'(?:twitter|x)\.com\/',
         ],
         'pinterest': [
-            r'pinterest\.com\/pin\/(\d+)',
+            r'pinterest\.(com|ru)\/',
         ],
     }
-    
+
+    MEDIA_EXTENSIONS = (
+        '.mp4', '.webm', '.mkv', '.mov',
+        '.jpg', '.jpeg', '.png', '.gif', '.webp',
+        '.mp3', '.m4a', '.wav', '.ogg', '.flac'
+    )
+
     @classmethod
     def is_valid_url(cls, url: str) -> bool:
-        """Проверка валидности URL"""
-        if not url:
+        if not url or not url.startswith(('http://', 'https://')):
             return False
-        
-        # Проверка на прямую ссылку на медиа
-        if url.startswith(('http://', 'https://')):
-            if any(ext in url.lower() for ext in ['.mp4', '.webm', '.jpg', '.jpeg', '.png', '.gif', '.mp3', '.m4a']):
-                return True
-        
-        # Проверка паттернов платформ
-        for platform, patterns in cls.PATTERNS.items():
+
+        url_l = url.lower()
+
+        # прямая ссылка на файл
+        if any(url_l.endswith(ext) for ext in cls.MEDIA_EXTENSIONS):
+            return True
+
+        # соцсети / платформы
+        for patterns in cls.PATTERNS.values():
             for pattern in patterns:
-                if re.search(pattern, url, re.IGNORECASE):
+                if re.search(pattern, url_l):
                     return True
-        
+
         return False
-    
+
     @classmethod
     def detect_platform(cls, url: str) -> Optional[str]:
-        """Определение платформы по URL"""
+        url_l = url.lower()
+
         for platform, patterns in cls.PATTERNS.items():
             for pattern in patterns:
-                if re.search(pattern, url, re.IGNORECASE):
+                if re.search(pattern, url_l):
                     return platform
-        
-        # Прямая ссылка на медиа
+
         if url.startswith(('http://', 'https://')):
             return 'direct'
-        
+
         return None
-    
+
     @classmethod
     def is_image_url(cls, url: str) -> bool:
-        """Проверка является ли URL изображением"""
-        return any(ext in url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp'])
-    
+        url_l = url.lower()
+        return any(url_l.endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'))
+
     @classmethod
     def is_video_url(cls, url: str) -> bool:
-        """Проверка является ли URL видео"""
-        return any(ext in url.lower() for ext in ['.mp4', '.webm', '.mov', '.avi', '.mkv'])
-    
+        url_l = url.lower()
+        return any(url_l.endswith(ext) for ext in ('.mp4', '.webm', '.mov', '.avi', '.mkv'))
+
     @classmethod
     def is_audio_url(cls, url: str) -> bool:
-        """Проверка является ли URL аудио"""
-        return any(ext in url.lower() for ext in ['.mp3', '.m4a', '.wav', '.ogg', '.flac'])
+        url_l = url.lower()
+        return any(url_l.endswith(ext) for ext in ('.mp3', '.m4a', '.wav', '.ogg', '.flac'))
