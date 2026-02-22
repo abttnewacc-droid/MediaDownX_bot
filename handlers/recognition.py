@@ -1,5 +1,6 @@
 from aiogram import types
 from aiogram.dispatcher import Dispatcher
+from aiogram.types.input_file import InputFile
 from services import MusicRecognizer
 from keyboards.inline import InlineKeyboards
 from utils.helpers import safe_delete_file
@@ -178,7 +179,7 @@ async def recognize_document(message: types.Message):
 
 
 def register(dp: Dispatcher):
-    dp.register_message_handler(recognize_audio, content_types=[types.ContentTypes.AUDIO])
-    dp.register_message_handler(recognize_voice, content_types=[types.ContentTypes.VOICE])
-    dp.register_message_handler(recognize_video, content_types=[types.ContentTypes.VIDEO])
-    dp.register_message_handler(recognize_document, content_types=[types.ContentTypes.DOCUMENT])
+    dp.register_message_handler(recognize_audio, content_types=['audio'])
+    dp.register_message_handler(recognize_voice, content_types=['voice'])
+    dp.register_message_handler(recognize_video, content_types=['video'])
+    dp.register_message_handler(recognize_document, content_types=['document'])
