@@ -1,5 +1,5 @@
-from aiogram import Router, F
-from aiogram.types import Message
+from aiogram import types
+from aiogram.dispatcher import Dispatcher
 from services import MusicRecognizer
 from keyboards.inline import InlineKeyboards
 from utils.helpers import safe_delete_file
@@ -7,12 +7,10 @@ from config import TEMP_DIR
 import asyncio
 from pathlib import Path
 
-router = Router()
 recognizer = MusicRecognizer()
 
 
-@router.message(F.audio)
-async def recognize_audio(message: Message):
+async def recognize_audio(message: types.Message):
     """Распознавание загруженного аудио"""
     try:
         status_msg = await message.answer("🎵 Распознаю трек...")
@@ -51,8 +49,7 @@ async def recognize_audio(message: Message):
         await message.answer(f"❌ Ошибка распознавания: {str(e)}")
 
 
-@router.message(F.voice)
-async def recognize_voice(message: Message):
+async def recognize_voice(message: types.Message):
     """Распознавание голосового сообщения"""
     try:
         status_msg = await message.answer("🎵 Распознаю музыку из голосового...")
@@ -90,8 +87,7 @@ async def recognize_voice(message: Message):
         await message.answer(f"❌ Ошибка: {str(e)}")
 
 
-@router.message(F.video)
-async def recognize_video(message: Message):
+async def recognize_video(message: types.Message):
     """Распознавание музыки из видео"""
     try:
         status_msg = await message.answer("🎵 Распознаю музыку из видео...")
@@ -131,8 +127,7 @@ async def recognize_video(message: Message):
         await message.answer(f"❌ Ошибка: {str(e)}")
 
 
-@router.message(F.document)
-async def recognize_document(message: Message):
+async def recognize_document(message: types.Message):
     """Распознавание из документа (аудио/видео файл)"""
     try:
         # Проверка расширения
@@ -180,3 +175,10 @@ async def recognize_document(message: Message):
     
     except Exception as e:
         await message.answer(f"❌ Ошибка: {str(e)}")
+
+
+def register(dp: Dispatcher):
+    dp.register_message_handler(recognize_audio, content_types=[types.ContentTypes.AUDIO])
+    dp.register_message_handler(recognize_voice, content_types=[types.ContentTypes.VOICE])
+    dp.register_message_handler(recognize_video, content_types=[types.ContentTypes.VIDEO])
+    dp.register_message_handler(recognize_document, content_types=[types.ContentTypes.DOCUMENT])
