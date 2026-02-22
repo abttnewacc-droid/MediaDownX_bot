@@ -19,237 +19,151 @@ search_results = {}
 
 
 async def handle_text_message(message: types.Message):
-    """Обработка текстовых сообщений"""
-    text = message.text
+    text = message.text.strip()
 
-    # Извлечение URL из текста
     urls = extract_urls_from_text(text)
-
     if urls:
-        # Обработка первого найденного URL
-        url = urls[0]
-        await process_url(message, url)
-    else:
-        # Проверка на поиск музыки (если нет URL)
-        if len(text) > 3 and not text.startswith('/'):
-            # Импорт обработчика поиска аудио
-            from handlers.audio import search_audio
-            await search_audio(message, text)
+        await process_url(message, urls[0])
+        return
+
+    if len(text) > 3 and not text.startswith('/'):
+        from handlers.audio import search_audio
+        await search_audio(message, text)
 
 
 async def process_url(message: types.Message, url: str):
-    """Обработка URL"""
-    # Валидация URL
     if not URLValidator.is_valid_url(url):
         await message.answer(
             "❌ Неподдерживаемая ссылка.\n\n"
-            "Поддерживаются: YouTube, Instagram, TikTok, Twitter/X, Pinterest и прямые ссылки на медиа."
+            "Поддерживаются: YouTube, Instagram, TikTok, Twitter/X, Pinterest и прямые ссылки."
         )
         return
-    
-    # Определение типа контента
+
     platform = URLValidator.detect_platform(url)
-    
-    # Отправка статуса
     status_msg = await message.answer("⏳ Анализирую ссылку...")
-    
+
     try:
-        # Проверка типа медиа
-        if URLValidator.is_image_url(url):
-            await process_image_url(message, url, status_msg)
-        elif URLValidator.is_audio_url(url):
-            await process_audio_url(message, url, status_msg)
-        else:
-            # Видео или неизвестный тип
-            await process_video_url(message, url, status_msg)
-    
+        # Прямые файлы
+        if platform == "direct":
+            if URLValidator.is_image_url(url):
+                await process_image_url(message, url, status_msg)
+            elif URLValidator.is_audio_url(url):
+                await process_audio_url(message, url, status_msg)
+            else:
+                await process_video_url(message, url, status_msg)
+            return
+
+        # Соцсети — ВСЕГДА через yt-dlp как видео
+        await process_video_url(message, url, status_msg)
+
     except Exception as e:
-        await status_msg.edit_text(f"❌ Ошибка обработки: {str(e)}")
+        logger.exception(e)
+        await status_msg.edit_text("❌ Ошибка обработки ссылки.")
 
 
 async def process_video_url(message: types.Message, url: str, status_msg: types.Message):
-    """Обработка видео URL"""
-    try:
-        # Получение информации о видео
-        await status_msg.edit_text("🔍 Получаю доступные качества...")
-        logger.info(f"Getting video info for URL: {url}")
-        
-        qualities = await downloader.get_available_qualities(url)
-        logger.info(f"Found {len(qualities)} qualities for {url}")
-        
-        if not qualities:
-            logger.warning(f"No qualities available for {url}")
-            await status_msg.edit_text(
-                "❌ Не удалось получить информацию о видео.\n"
-                "Попробуйте другую ссылку или повторите позже."
-            )
-            return
-        
-        # Получение информации о видео
-        info = await downloader.get_video_info(url)
-        
-        if info:
-            title = info.get('title', 'Без названия')[:100]
-            duration = int(info.get('duration') or 0)
+    await status_msg.edit_text("🔍 Анализирую видео…")
 
-            info_text = f"📹 <b>{title}</b>\n"
-            if duration:
-                info_text += f"⏱ Длительность: {format_duration(duration)}\n"
+    info = await downloader.get_video_info(url)
+    if not info:
+        await status_msg.edit_text("❌ Не удалось получить информацию о видео.")
+        return
 
-            info_text += f"\n📊 Доступные качества:"
-        else:
-            info_text = "📊 Выберите качество:"
-        
-        # Отправка клавиатуры с качествами
-        await status_msg.edit_text(
-            info_text,
-            reply_markup=InlineKeyboards.video_qualities(qualities, url)
-        )
-    
-    except Exception as e:
-        await status_msg.edit_text(f"❌ Ошибка: {str(e)}")
+    qualities = await downloader.get_available_qualities(url)
+    if not qualities:
+        await status_msg.edit_text("❌ Не удалось получить доступные качества.")
+        return
+
+    title = info.get("title", "Без названия")[:100]
+    duration = info.get("duration")
+
+    text = f"📹 <b>{title}</b>\n"
+    if duration:
+        text += f"⏱ {format_duration(int(duration))}\n"
+    text += "\n📊 Выбери качество:"
+
+    await status_msg.edit_text(
+        text,
+        reply_markup=InlineKeyboards.video_qualities(qualities, url)
+    )
 
 
 async def process_image_url(message: types.Message, url: str, status_msg: types.Message):
-    """Обработка изображения"""
-    try:
-        await status_msg.edit_text("📥 Скачиваю изображение...")
-        
-        # Загрузка через yt-dlp (поддерживает Instagram, Pinterest и т.д.)
-        image_file = await downloader.download_image(url)
-        
-        if not image_file or not image_file.exists():
-            # Попытка прямой загрузки
-            image_file = await downloader.download_direct_url(url)
-        
-        if image_file and image_file.exists():
-            await status_msg.delete()
-            
-            # Отправка как документ (без сжатия)
-            await message.answer_document(
-                InputFile(image_file),
-                caption="🖼 Изображение в оригинальном качестве"
-            )
-            
-            # Удаление временного файла
-            asyncio.create_task(safe_delete_file(image_file, delay=10))
-        else:
-            await status_msg.edit_text("❌ Не удалось скачать изображение")
-    
-    except Exception as e:
-        await status_msg.edit_text(f"❌ Ошибка: {str(e)}")
+    await status_msg.edit_text("📥 Скачиваю изображение…")
+
+    image_file = await downloader.download_image(url)
+    if not image_file or not image_file.exists():
+        image_file = await downloader.download_direct_url(url)
+
+    if not image_file or not image_file.exists():
+        await status_msg.edit_text("❌ Не удалось скачать изображение.")
+        return
+
+    await status_msg.delete()
+    await message.answer_document(
+        InputFile(image_file),
+        caption="🖼 Оригинальное изображение"
+    )
+    asyncio.create_task(safe_delete_file(image_file, delay=15))
 
 
 async def process_audio_url(message: types.Message, url: str, status_msg: types.Message):
-    """Обработка аудио URL"""
-    try:
-        await status_msg.edit_text("🎵 Скачиваю аудио...")
-        
-        # Загрузка
-        audio_file = await downloader.download_video(url, audio_only=True)
-        
-        if audio_file and audio_file.exists():
-            await status_msg.delete()
-            
-            # Отправка как аудио
-            await message.answer_audio(
-                InputFile(audio_file),
-                caption="🎵 Аудио файл"
-            )
-            
-            # Удаление временного файла
-            asyncio.create_task(safe_delete_file(audio_file, delay=10))
-        else:
-            await status_msg.edit_text("❌ Не удалось скачать аудио")
-    
-    except Exception as e:
-        await status_msg.edit_text(f"❌ Ошибка: {str(e)}")
+    await status_msg.edit_text("🎵 Скачиваю аудио…")
+
+    audio_file = await downloader.download_video(url, audio_only=True)
+    if not audio_file or not audio_file.exists():
+        await status_msg.edit_text("❌ Не удалось скачать аудио.")
+        return
+
+    await status_msg.delete()
+    await message.answer_audio(
+        InputFile(audio_file),
+        caption="🎵 Аудио файл"
+    )
+    asyncio.create_task(safe_delete_file(audio_file, delay=15))
 
 
 async def callback_download_video(callback: types.CallbackQuery):
-    """Callback скачивания видео в выбранном качестве"""
-    try:
-        # Парсинг данных: video:quality:url (url может содержать :)
-        data = callback.data
-        first_colon = data.index(":")
-        rest = data[first_colon+1:]
-        second_colon = rest.index(":")
-        quality = rest[:second_colon]
-        url = rest[second_colon+1:]
-        
-        await callback.message.edit_text("⏳ Начинаю загрузку...")
-        
-        # Загрузка видео
-        video_file = await downloader.download_video(
-            url, 
-            quality=quality,
-            audio_only=False
-        )
-        
-        if video_file and video_file.exists():
-            await callback.message.edit_text("📤 Отправляю видео...")
-            
-            # Отправка как документ (без сжатия Telegram)
-            await callback.message.answer_document(
-                InputFile(video_file),
-                caption=f"📹 Видео {quality if quality != 'best' else 'максимального качества'}"
-            )
-            
-            await callback.message.delete()
-            
-            # Удаление временного файла
-            asyncio.create_task(safe_delete_file(video_file, delay=30))
-        else:
-            await callback.message.edit_text(
-                "❌ Не удалось скачать видео.\n"
-                "Возможно, выбранное качество недоступно."
-            )
-        
+    data = callback.data
+    _, quality, url = data.split(":", 2)
+
+    await callback.message.edit_text("⏳ Загружаю видео…")
+
+    video_file = await downloader.download_video(url, quality=quality)
+    if not video_file or not video_file.exists():
+        await callback.message.edit_text("❌ Не удалось скачать видео.")
         await callback.answer()
-    
-    except Exception as e:
-        await callback.message.edit_text(f"❌ Ошибка: {str(e)}")
-        await callback.answer()
+        return
+
+    await callback.message.answer_document(
+        InputFile(video_file),
+        caption=f"📹 Видео {quality if quality != 'best' else 'максимального качества'}"
+    )
+    await callback.message.delete()
+    asyncio.create_task(safe_delete_file(video_file, delay=30))
+    await callback.answer()
 
 
 async def callback_download_audio_only(callback: types.CallbackQuery):
-    """Callback скачивания только аудио из видео"""
-    try:
-        # Парсинг данных: audio_only:url (url может содержать :)
-        url = callback.data[len("audio_only:"):]
-        
-        await callback.message.edit_text("🎵 Извлекаю аудио...")
-        
-        # Загрузка аудио
-        audio_file = await downloader.download_video(
-            url, 
-            audio_only=True
-        )
-        
-        if audio_file and audio_file.exists():
-            await callback.message.edit_text("📤 Отправляю аудио...")
-            
-            # Отправка как аудио
-            await callback.message.answer_audio(
-                InputFile(audio_file),
-                caption="🎵 Аудио из видео (MP3 320kbps)"
-            )
-            
-            await callback.message.delete()
-            
-            # Удаление временного файла
-            asyncio.create_task(safe_delete_file(audio_file, delay=30))
-        else:
-            await callback.message.edit_text("❌ Не удалось извлечь аудио")
-        
+    url = callback.data[len("audio_only:"):]
+    await callback.message.edit_text("🎵 Извлекаю аудио…")
+
+    audio_file = await downloader.download_video(url, audio_only=True)
+    if not audio_file or not audio_file.exists():
+        await callback.message.edit_text("❌ Не удалось извлечь аудио.")
         await callback.answer()
-    
-    except Exception as e:
-        await callback.message.edit_text(f"❌ Ошибка: {str(e)}")
-        await callback.answer()
+        return
+
+    await callback.message.answer_audio(
+        InputFile(audio_file),
+        caption="🎵 Аудио из видео (320 kbps)"
+    )
+    await callback.message.delete()
+    asyncio.create_task(safe_delete_file(audio_file, delay=30))
+    await callback.answer()
 
 
 def register(dp: Dispatcher):
-    dp.register_message_handler(handle_text_message, content_types=['text'])
+    dp.register_message_handler(handle_text_message, content_types=["text"])
     dp.register_callback_query_handler(callback_download_video, lambda c: c.data.startswith("video:"))
     dp.register_callback_query_handler(callback_download_audio_only, lambda c: c.data.startswith("audio_only:"))
