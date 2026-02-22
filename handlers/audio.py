@@ -1,6 +1,6 @@
 from aiogram import types
 from aiogram.dispatcher import Dispatcher
-from aiogram.types.input_file import InputFile
+from aiogram.types import InputFile
 from services import MusicRecognizer, MediaDownloader, AudioProcessor
 from keyboards.inline import InlineKeyboards
 from utils.helpers import safe_delete_file
@@ -11,162 +11,125 @@ downloader = MediaDownloader()
 audio_processor = AudioProcessor()
 
 # Хранилище результатов поиска для каждого пользователя
-user_search_results = {}
+user_search_results: dict[int, list] = {}
 
 
 async def search_audio(message: types.Message, query: str):
-    """Поиск аудио по запросу"""
     try:
         status_msg = await message.answer("🔍 Ищу треки...")
-        
-        # Поиск через Shazam
+
         tracks = await recognizer.search_track(query, limit=10)
-        
         if not tracks:
             await status_msg.edit_text(
                 f"❌ Ничего не найдено по запросу: <b>{query}</b>\n\n"
                 "Попробуйте изменить запрос или использовать другое название."
             )
             return
-        
-        # Сохранение результатов для пользователя
-        user_id = message.from_user.id
-        user_search_results[user_id] = tracks
-        
-        # Формирование списка треков
-        result_text = f"🎵 <b>Найдено {len(tracks)} треков:</b>\n\n"
-        
-        for idx, track in enumerate(tracks, 1):
-            result_text += f"{idx}. <b>{track['title']}</b>\n"
-            result_text += f"   👤 {track['artist']}\n\n"
-        
-        result_text += "Выберите трек для скачивания:"
-        
+
+        user_search_results[message.from_user.id] = tracks
+
+        text = f"🎵 <b>Найдено {len(tracks)} треков:</b>\n\n"
+        for i, t in enumerate(tracks, 1):
+            text += f"{i}. <b>{t['title']}</b>\n   👤 {t['artist']}\n\n"
+        text += "Выберите трек для скачивания:"
+
         await status_msg.edit_text(
-            result_text,
+            text,
             reply_markup=InlineKeyboards.audio_search_results(tracks)
         )
-    
+
     except Exception as e:
-        await message.answer(f"❌ Ошибка поиска: {str(e)}")
+        await message.answer(f"❌ Ошибка поиска: {e}")
 
 
 async def callback_download_track(callback: types.CallbackQuery):
-    """Callback скачивания трека из результатов поиска"""
     try:
-        # Парсинг индекса трека
-        track_idx = int(callback.data.split(":")[1])
         user_id = callback.from_user.id
-        
-        # Получение результатов поиска пользователя
+        idx = int(callback.data.split(":")[1])
+
         if user_id not in user_search_results:
-            await callback.answer("❌ Результаты поиска устарели. Выполните поиск заново.", show_alert=True)
+            await callback.answer("❌ Результаты устарели", show_alert=True)
             return
-        
+
         tracks = user_search_results[user_id]
-        
-        if track_idx >= len(tracks):
+        if idx >= len(tracks):
             await callback.answer("❌ Неверный трек", show_alert=True)
             return
-        
-        track = tracks[track_idx]
-        
+
+        track = tracks[idx]
         await callback.message.edit_text(
-            f"⏳ Скачиваю трек:\n<b>{track['title']}</b> - {track['artist']}"
+            f"⏳ Скачиваю:\n<b>{track['title']}</b> — {track['artist']}"
         )
-        
-        # Поиск и скачивание через YouTube
-        search_query = f"{track['artist']} {track['title']} audio"
-        youtube_url = f"ytsearch1:{search_query}"
-        
-        # Загрузка аудио
+
+        query = f"{track['artist']} {track['title']} audio"
         audio_file = await downloader.download_video(
-            youtube_url,
+            f"ytsearch1:{query}",
             audio_only=True
         )
-        
-        if audio_file and audio_file.exists():
-            await callback.message.edit_text("🎨 Добавляю метаданные...")
-            
-            # Добавление метаданных
-            metadata = {
-                'title': track['title'],
-                'artist': track['artist'],
-            }
-            
-            await audio_processor.add_metadata(
-                audio_file,
-                metadata,
-                cover_url=track.get('cover_url')
-            )
-            
-            await callback.message.edit_text("📤 Отправляю трек...")
-            
-            # Отправка аудио
-            await callback.message.answer_audio(
-                FSInputFile(audio_file),
-                title=track['title'],
-                performer=track['artist'],
-                caption=f"🎵 <b>{track['title']}</b>\n👤 {track['artist']}"
-            )
-            
-            await callback.message.delete()
-            
-            # Удаление временного файла
-            asyncio.create_task(safe_delete_file(audio_file, delay=30))
-        else:
-            await callback.message.edit_text(
-                "❌ Не удалось скачать трек.\n"
-                "Попробуйте другой вариант из списка."
-            )
-        
+
+        if not audio_file or not audio_file.exists():
+            await callback.message.edit_text("❌ Не удалось скачать трек")
+            return
+
+        await audio_processor.add_metadata(
+            audio_file,
+            {
+                "title": track["title"],
+                "artist": track["artist"],
+            },
+            cover_url=track.get("cover_url")
+        )
+
+        await callback.message.answer_audio(
+            InputFile(audio_file),
+            title=track["title"],
+            performer=track["artist"],
+            caption=f"🎵 <b>{track['title']}</b>\n👤 {track['artist']}"
+        )
+
+        await callback.message.delete()
+        asyncio.create_task(safe_delete_file(audio_file, delay=30))
         await callback.answer()
-    
+
     except Exception as e:
-        await callback.message.edit_text(f"❌ Ошибка: {str(e)}")
+        await callback.message.edit_text(f"❌ Ошибка: {e}")
         await callback.answer()
 
 
 async def callback_download_recognized(callback: types.CallbackQuery):
-    """Callback скачивания распознанного трека"""
     try:
-        # Извлечение названия трека (может содержать :)
-        track_title = callback.data[len("download_recognized:"):]
-        
-        await callback.message.edit_text(f"⏳ Скачиваю: <b>{track_title}</b>")
-        
-        # Поиск на YouTube
-        youtube_url = f"ytsearch1:{track_title}"
-        
-        # Загрузка
+        title = callback.data.replace("download_recognized:", "")
+        await callback.message.edit_text(f"⏳ Скачиваю: <b>{title}</b>")
+
         audio_file = await downloader.download_video(
-            youtube_url,
+            f"ytsearch1:{title}",
             audio_only=True
         )
-        
-        if audio_file and audio_file.exists():
-            await callback.message.edit_text("📤 Отправляю...")
-            
-            # Отправка
-            await callback.message.answer_audio(
-                InputFile(audio_file),
-                caption=f"🎵 {track_title}"
-            )
-            
-            await callback.message.delete()
-            
-            # Удаление
-            asyncio.create_task(safe_delete_file(audio_file, delay=30))
-        else:
+
+        if not audio_file or not audio_file.exists():
             await callback.message.edit_text("❌ Не удалось скачать трек")
-        
+            return
+
+        await callback.message.answer_audio(
+            InputFile(audio_file),
+            caption=f"🎵 {title}"
+        )
+
+        await callback.message.delete()
+        asyncio.create_task(safe_delete_file(audio_file, delay=30))
         await callback.answer()
-    
+
     except Exception as e:
-        await callback.message.edit_text(f"❌ Ошибка: {str(e)}")
+        await callback.message.edit_text(f"❌ Ошибка: {e}")
         await callback.answer()
 
 
 def register(dp: Dispatcher):
-    dp.register_callback_query_handler(callback_download_track, lambda c: c.data.startswith("download_track:"))
-    dp.register_callback_query_handler(callback_download_recognized, lambda c: c.data.startswith("download_recognized:"))
+    dp.register_callback_query_handler(
+        callback_download_track,
+        lambda c: c.data.startswith("download_track:")
+    )
+    dp.register_callback_query_handler(
+        callback_download_recognized,
+        lambda c: c.data.startswith("download_recognized:")
+    )
