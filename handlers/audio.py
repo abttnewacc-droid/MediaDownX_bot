@@ -4,6 +4,7 @@ from services import MusicRecognizer, MediaDownloader, AudioProcessor
 from keyboards.inline import InlineKeyboards
 from utils.helpers import safe_delete_file
 import asyncio
+from aiogram.types import FSInputFile
 
 recognizer = MusicRecognizer()
 downloader = MediaDownloader()
