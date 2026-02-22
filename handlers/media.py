@@ -1,10 +1,11 @@
 from aiogram import types
 from aiogram.dispatcher import Dispatcher
 from utils.validators import URLValidator
-from utils.helpers import extract_urls_from_text, safe_delete_file
+from utils.helpers import extract_urls_from_text, safe_delete_file, format_duration
 from services import MediaDownloader
 from keyboards.inline import InlineKeyboards
 import asyncio
+from aiogram.types import FSInputFile
 
 downloader = MediaDownloader()
 
@@ -83,14 +84,12 @@ async def process_video_url(message: types.Message, url: str, status_msg: types.
         
         if info:
             title = info.get('title', 'Без названия')[:100]
-            duration = info.get('duration', 0)
-            
+            duration = int(info.get('duration') or 0)
+
             info_text = f"📹 <b>{title}</b>\n"
             if duration:
-                minutes = duration // 60
-                seconds = duration % 60
-                info_text += f"⏱ Длительность: {minutes}:{seconds:02d}\n"
-            
+                info_text += f"⏱ Длительность: {format_duration(duration)}\n"
+
             info_text += f"\n📊 Доступные качества:"
         else:
             info_text = "📊 Выберите качество:"
