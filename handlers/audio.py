@@ -1,11 +1,10 @@
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram import types
+from aiogram.dispatcher import Dispatcher
 from services import MusicRecognizer, MediaDownloader, AudioProcessor
 from keyboards.inline import InlineKeyboards
 from utils.helpers import safe_delete_file
 import asyncio
 
-router = Router()
 recognizer = MusicRecognizer()
 downloader = MediaDownloader()
 audio_processor = AudioProcessor()
@@ -14,7 +13,7 @@ audio_processor = AudioProcessor()
 user_search_results = {}
 
 
-async def search_audio(message: Message, query: str):
+async def search_audio(message: types.Message, query: str):
     """Поиск аудио по запросу"""
     try:
         status_msg = await message.answer("🔍 Ищу треки...")
@@ -51,8 +50,7 @@ async def search_audio(message: Message, query: str):
         await message.answer(f"❌ Ошибка поиска: {str(e)}")
 
 
-@router.callback_query(F.data.startswith("download_track:"))
-async def callback_download_track(callback: CallbackQuery):
+async def callback_download_track(callback: types.CallbackQuery):
     """Callback скачивания трека из результатов поиска"""
     try:
         # Парсинг индекса трека
@@ -128,8 +126,7 @@ async def callback_download_track(callback: CallbackQuery):
         await callback.answer()
 
 
-@router.callback_query(F.data.startswith("download_recognized:"))
-async def callback_download_recognized(callback: CallbackQuery):
+async def callback_download_recognized(callback: types.CallbackQuery):
     """Callback скачивания распознанного трека"""
     try:
         # Извлечение названия трека
@@ -167,3 +164,8 @@ async def callback_download_recognized(callback: CallbackQuery):
     except Exception as e:
         await callback.message.edit_text(f"❌ Ошибка: {str(e)}")
         await callback.answer()
+
+
+def register(dp: Dispatcher):
+    dp.register_callback_query_handler(callback_download_track, lambda c: c.data.startswith("download_track:"))
+    dp.register_callback_query_handler(callback_download_recognized, lambda c: c.data.startswith("download_recognized:"))
