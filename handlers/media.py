@@ -1,13 +1,11 @@
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, FSInputFile
-from aiogram.filters import StateFilter
+from aiogram import types
+from aiogram.dispatcher import Dispatcher
 from utils.validators import URLValidator
 from utils.helpers import extract_urls_from_text, safe_delete_file
 from services import MediaDownloader
 from keyboards.inline import InlineKeyboards
 import asyncio
 
-router = Router()
 downloader = MediaDownloader()
 
 # Хранилище активных загрузок
@@ -16,14 +14,13 @@ active_downloads = {}
 search_results = {}
 
 
-@router.message(F.text)
-async def handle_text_message(message: Message):
+async def handle_text_message(message: types.Message):
     """Обработка текстовых сообщений"""
     text = message.text
-    
+
     # Извлечение URL из текста
     urls = extract_urls_from_text(text)
-    
+
     if urls:
         # Обработка первого найденного URL
         url = urls[0]
@@ -36,7 +33,7 @@ async def handle_text_message(message: Message):
             await search_audio(message, text)
 
 
-async def process_url(message: Message, url: str):
+async def process_url(message: types.Message, url: str):
     """Обработка URL"""
     # Валидация URL
     if not URLValidator.is_valid_url(url):
@@ -66,7 +63,7 @@ async def process_url(message: Message, url: str):
         await status_msg.edit_text(f"❌ Ошибка обработки: {str(e)}")
 
 
-async def process_video_url(message: Message, url: str, status_msg: Message):
+async def process_video_url(message: types.Message, url: str, status_msg: types.Message):
     """Обработка видео URL"""
     try:
         # Получение информации о видео
@@ -108,7 +105,7 @@ async def process_video_url(message: Message, url: str, status_msg: Message):
         await status_msg.edit_text(f"❌ Ошибка: {str(e)}")
 
 
-async def process_image_url(message: Message, url: str, status_msg: Message):
+async def process_image_url(message: types.Message, url: str, status_msg: types.Message):
     """Обработка изображения"""
     try:
         await status_msg.edit_text("📥 Скачиваю изображение...")
@@ -138,7 +135,7 @@ async def process_image_url(message: Message, url: str, status_msg: Message):
         await status_msg.edit_text(f"❌ Ошибка: {str(e)}")
 
 
-async def process_audio_url(message: Message, url: str, status_msg: Message):
+async def process_audio_url(message: types.Message, url: str, status_msg: types.Message):
     """Обработка аудио URL"""
     try:
         await status_msg.edit_text("🎵 Скачиваю аудио...")
@@ -164,8 +161,7 @@ async def process_audio_url(message: Message, url: str, status_msg: Message):
         await status_msg.edit_text(f"❌ Ошибка: {str(e)}")
 
 
-@router.callback_query(F.data.startswith("video:"))
-async def callback_download_video(callback: CallbackQuery):
+async def callback_download_video(callback: types.CallbackQuery):
     """Callback скачивания видео в выбранном качестве"""
     try:
         # Парсинг данных: video:quality:url
@@ -208,8 +204,7 @@ async def callback_download_video(callback: CallbackQuery):
         await callback.answer()
 
 
-@router.callback_query(F.data.startswith("audio_only:"))
-async def callback_download_audio_only(callback: CallbackQuery):
+async def callback_download_audio_only(callback: types.CallbackQuery):
     """Callback скачивания только аудио из видео"""
     try:
         # Парсинг данных: audio_only:url
@@ -244,3 +239,9 @@ async def callback_download_audio_only(callback: CallbackQuery):
     except Exception as e:
         await callback.message.edit_text(f"❌ Ошибка: {str(e)}")
         await callback.answer()
+
+
+def register(dp: Dispatcher):
+    dp.register_message_handler(handle_text_message, content_types=types.ContentTypes.TEXT)
+    dp.register_callback_query_handler(callback_download_video, lambda c: c.data.startswith("video:"))
+    dp.register_callback_query_handler(callback_download_audio_only, lambda c: c.data.startswith("audio_only:"))
