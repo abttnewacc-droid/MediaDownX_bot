@@ -4,6 +4,9 @@ from pathlib import Path
 from typing import Optional, Dict, List
 from config import TEMP_DIR, YT_DLP_OPTIONS, MAX_FILE_SIZE
 from utils.helpers import clean_filename
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class MediaDownloader:
@@ -18,18 +21,23 @@ class MediaDownloader:
             ydl_opts = {
                 **YT_DLP_OPTIONS,
                 'skip_download': True,
+                'socket_timeout': 60,
             }
             
             loop = asyncio.get_event_loop()
-            info = await loop.run_in_executor(
-                None,
-                lambda: self._extract_info(url, ydl_opts)
-            )
+            try:
+                info = await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: self._extract_info(url, ydl_opts)),
+                    timeout=120
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout getting video info for {url}")
+                return None
             
             return info
         
         except Exception as e:
-            print(f"Error getting video info: {e}")
+            logger.error(f"Error getting video info for {url}: {e}")
             return None
     
     def _extract_info(self, url: str, opts: dict) -> dict:
