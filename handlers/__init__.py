@@ -1,3 +1,13 @@
-from . import start, media, audio, recognition
+from .init import (
+	start_register,
+	media_register,
+	audio_register,
+	recognition_register,
+)
 
-__all__ = ['start', 'media', 'audio', 'recognition']
+__all__ = [
+	'start_register',
+	'media_register',
+	'audio_register',
+	'recognition_register',
+]
