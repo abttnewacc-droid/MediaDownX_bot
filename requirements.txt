@@ -1,8 +1,20 @@
 aiogram==2.25.2
+
+# загрузка медиа
 yt-dlp==2024.12.23
+
+# shazam
 shazamio==0.6.0
+
+# аудио / теги
 mutagen==1.47.0
+pydub==0.25.1
+
+# async / сеть / файлы
+aiohttp==3.8.6
 aiofiles==23.2.1
+
+# utils
 pydantic==1.10.13
 numpy==1.26.4
 Pillow==10.4.0
