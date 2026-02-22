@@ -29,7 +29,7 @@ cleaner = TempFileCleaner(max_age_minutes=30)
 
 async def on_startup(dp):
     logger.info("🚀 Бот запущен!")
-    cleaner.start()
+    dp.loop.create_task(cleaner.start_auto_cleanup())
 
 
 async def on_shutdown(dp):
