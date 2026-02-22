@@ -4,7 +4,6 @@ from keyboards.inline import InlineKeyboards
 
 
 async def cmd_start(message: types.Message):
-    """Обработчик команды /start"""
     welcome_text = """
 🎬 <b>Добро пожаловать в MediaDownX!</b>
 
@@ -29,21 +28,16 @@ async def cmd_start(message: types.Message):
 • Без сжатия Telegram
 
 <b>Как использовать:</b>
-1. Отправь мне ссылку на видео/изображение
+1. Отправь ссылку на видео/изображение
 2. Выбери нужное качество
 3. Получи файл без сжатия!
 
 Или напиши название песни для поиска 🎶
 """
-
-    await message.answer(
-        welcome_text,
-        reply_markup=InlineKeyboards.main_menu()
-    )
+    await message.answer(welcome_text, reply_markup=InlineKeyboards.main_menu())
 
 
 async def cmd_help(message: types.Message):
-    """Обработчик команды /help"""
     help_text = """
 📖 <b>Подробная инструкция:</b>
 
@@ -65,31 +59,17 @@ async def cmd_help(message: types.Message):
 <b>4️⃣ Изображения:</b>
 • Отправь ссылку на пост Instagram/Pinterest
 • Получи оригинал без сжатия
-
-<b>Поддерживаемые платформы:</b>
-✅ YouTube, Instagram, TikTok
-✅ Twitter/X, Pinterest
-✅ Прямые ссылки на медиа
-
-<b>Особенности:</b>
-• Без ограничений использования
-• Максимальное качество
-• Быстрая обработка
-• Автоматические метаданные
 """
-
     await message.answer(help_text)
 
 
 async def callback_help(callback: types.CallbackQuery):
-    """Callback кнопки помощи"""
     await callback.message.delete()
     await cmd_help(callback.message)
     await callback.answer()
 
 
 async def callback_about(callback: types.CallbackQuery):
-    """Информация о боте"""
     about_text = """
 🤖 <b>MediaDownX Bot</b>
 
@@ -97,25 +77,19 @@ async def callback_about(callback: types.CallbackQuery):
 <b>Разработчик:</b> @AbdullohBazhov
 
 <b>Технологии:</b>
-• Python + aiogram 3.x
-• yt-dlp (универсальный загрузчик)
-• Shazam API (распознавание музыки)
-• FFmpeg (обработка медиа)
+• Python + aiogram 2.25.2
+• yt-dlp
+• Shazam (shazamio)
+• FFmpeg
 
 <b>Возможности:</b>
 ✨ Скачивание видео до 4K
 ✨ Аудио с метаданными
 ✨ Распознавание музыки
 ✨ Оригинальное качество изображений
-✨ Без ограничений и подписок
-
-💡 <b>Бот полностью бесплатный!</b>
+✨ Без ограничений
 """
-
-    await callback.message.edit_text(
-        about_text,
-        reply_markup=InlineKeyboards.main_menu()
-    )
+    await callback.message.edit_text(about_text, reply_markup=InlineKeyboards.main_menu())
     await callback.answer()
 
 
