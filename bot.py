@@ -1,8 +1,11 @@
-import asyncio
 import logging
 import sys
+import asyncio
+
 from aiogram import Bot, Dispatcher
+from aiogram.utils import executor
 from aiogram.types import ParseMode
+
 from config import BOT_TOKEN
 from handlers import (
     start_register,
@@ -12,55 +15,43 @@ from handlers import (
 )
 from services import TempFileCleaner
 
-# Настройка логирования
+# ─── ЛОГИ ─────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
 
+# ─── БОТ И DP ─────────────────────────────────────────────────────────
+bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher(bot)
 
-async def main():
-    """Главная функция запуска бота"""
-    
-    # Инициализация бота
-    bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
-    
-    dp = Dispatcher(bot)
-    
-    # Регистрация обработчиков
-    start_register(dp)
-    media_register(dp)
-    audio_register(dp)
-    recognition_register(dp)
-    
-    # Запуск автоочистки временных файлов
-    cleaner = TempFileCleaner(max_age_minutes=30)
+# ─── РЕГИСТРАЦИЯ ХЕНДЛЕРОВ ────────────────────────────────────────────
+start_register(dp)
+media_register(dp)
+audio_register(dp)
+recognition_register(dp)
+
+# ─── CLEANER ──────────────────────────────────────────────────────────
+cleaner = TempFileCleaner(max_age_minutes=30)
+
+# ─── STARTUP / SHUTDOWN ───────────────────────────────────────────────
+async def on_startup(dispatcher: Dispatcher):
     asyncio.create_task(cleaner.start_auto_cleanup())
-    
+    await bot.delete_webhook(drop_pending_updates=True)
     logger.info("🚀 Бот запущен!")
-    
-    try:
-        # Удаление вебхука (для polling)
-        await bot.delete_webhook(drop_pending_updates=True)
-        
-        # Запуск polling
-    await dp.start_polling()
-    
-    finally:
-        # Остановка автоочистки
-        cleaner.stop()
-        await bot.session.close()
-        logger.info("🛑 Бот остановлен")
 
+async def on_shutdown(dispatcher: Dispatcher):
+    cleaner.stop()
+    await bot.session.close()
+    logger.info("🛑 Бот остановлен")
 
+# ─── ЗАПУСК ───────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("⚠️ Бот остановлен пользователем")
-    except Exception as e:
-        logger.error(f"❌ Критическая ошибка: {e}")
+    executor.start_polling(
+        dp,
+        on_startup=on_startup,
+        on_shutdown=on_shutdown,
+        skip_updates=True,
+    )
