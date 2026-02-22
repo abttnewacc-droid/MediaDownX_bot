@@ -38,8 +38,9 @@ cleaner = TempFileCleaner(max_age_minutes=30)
 
 # ─── STARTUP / SHUTDOWN ───────────────────────────────────────────────
 async def on_startup(dispatcher: Dispatcher):
-    asyncio.create_task(cleaner.start_auto_cleanup())
+    # гарантированно убираем вебхук и старые апдейты
     await bot.delete_webhook(drop_pending_updates=True)
+    asyncio.create_task(cleaner.start_auto_cleanup())
     logger.info("🚀 Бот запущен!")
 
 async def on_shutdown(dispatcher: Dispatcher):
